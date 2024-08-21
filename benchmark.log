@@ -1,0 +1,18 @@
+2024-08-21 16:35:59.249 DEBUG [MainThread]: Logging Config: {'version': 1, 'disable_existing_loggers': False, 'formatters': {'debugFormater': {'format': '%(asctime)s.%(msecs)03d %(levelname)s [%(threadName)s]: %(message)s', 'datefmt': '%Y-%m-%d %H:%M:%S'}, 'simpleFormater': {'format': '%(message)s'}}, 'handlers': {'file': {'class': 'logging.FileHandler', 'formatter': 'debugFormater', 'level': 'DEBUG', 'filename': 'benchmark.log'}, 'console': {'class': 'logging.StreamHandler', 'formatter': 'simpleFormater', 'level': 'INFO', 'stream': 'ext://sys.stdout'}}, 'loggers': {'': {'level': 'DEBUG', 'handlers': ['file']}, '__main__': {'level': 'DEBUG', 'handlers': ['console'], 'propagate': True}}}
+2024-08-21 16:35:59.249 DEBUG [MainThread]: Logging is configured
+2024-08-21 16:35:59.249 DEBUG [MainThread]: Parsed arguments successfully!
+2024-08-21 16:35:59.251 DEBUG [MainThread]: Popen(['git', 'remote', 'add', '--', 'upstream', 'https://github.com/efficientengineering/xls.git'], cwd=/home/circleci/project, stdin=None, shell=False, universal_newlines=False)
+2024-08-21 16:35:59.253 DEBUG [MainThread]: Popen(['git', 'fetch', '-v', '--', 'upstream', 'main'], cwd=/home/circleci/project, stdin=None, shell=False, universal_newlines=False)
+2024-08-21 16:35:59.354 DEBUG [MainThread]: Fetch head lines do not match lines provided via progress information
+length of progress lines 2 should be equal to lines in FETCH_HEAD file 1
+Will ignore extra progress lines or fetch head lines.
+2024-08-21 16:35:59.354 DEBUG [MainThread]: b"info lines: [' * branch                main       -> FETCH_HEAD', ' * [new branch]          main       -> upstream/main']"
+2024-08-21 16:35:59.354 DEBUG [MainThread]: b'head info: ["6f3a2e036f7596144458957f3c8a2c814a2cd491\\t\\tbranch \'main\' of https://github.com/efficientengineering/xls\\n"]'
+2024-08-21 16:35:59.354 DEBUG [MainThread]: Popen(['git', 'rev-list', 'upstream/main', '--'], cwd=/home/circleci/project, stdin=None, shell=False, universal_newlines=False)
+2024-08-21 16:35:59.357 DEBUG [MainThread]: Popen(['git', 'cat-file', '--batch'], cwd=/home/circleci/project, stdin=<valid stream>, shell=False, universal_newlines=False)
+2024-08-21 16:35:59.362 DEBUG [MainThread]: Popen(['git', 'checkout', '-B', 'replay-2024-08-21-a5a33f2ed314b767b9263f9c8033e01f9bd4427c', 'main'], cwd=/home/circleci/project, stdin=None, shell=False, universal_newlines=False)
+2024-08-21 16:35:59.456 DEBUG [MainThread]: Popen(['git', 'config', 'user.email', ''], cwd=/home/circleci/project, stdin=None, shell=False, universal_newlines=False)
+2024-08-21 16:35:59.458 DEBUG [MainThread]: Popen(['git', 'config', 'user.name', 'replay-bot'], cwd=/home/circleci/project, stdin=None, shell=False, universal_newlines=False)
+2024-08-21 16:35:59.460 DEBUG [MainThread]: Popen(['git', 'cat-file', '--batch-check'], cwd=/home/circleci/project, stdin=<valid stream>, shell=False, universal_newlines=False)
+2024-08-21 16:35:59.501 DEBUG [MainThread]: Popen(['git', 'reset', '--hard', 'a5a33f2ed314b767b9263f9c8033e01f9bd4427c', '--'], cwd=/home/circleci/project, stdin=None, shell=False, universal_newlines=False)
+2024-08-21 16:35:59.526 DEBUG [MainThread]: Popen(['git', 'add', '.'], cwd=/home/circleci/project, stdin=None, shell=False, universal_newlines=False)

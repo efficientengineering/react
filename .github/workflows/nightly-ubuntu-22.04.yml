@@ -1,0 +1,99 @@
+# https://docs.github.com/en/actions/reference/workflow-syntax-for-github-actions
+# See also: https://github.com/marketplace/actions/bazel-action
+
+name: Nightly Ubuntu 22.04
+on:
+  schedule:
+    # Nightly at midnight -- uses UTC, so 7am.
+    - cron:  '0 7 * * *'
+  # This lets us trigger manually from the UI.
+  workflow_dispatch:
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Nightly Ubuntu 22.04
+    runs-on:
+      labels: ubuntu-22.04-64core
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 0 # so that git-describe can find previous tags
+
+      - name: Install dependencies via apt
+        run: sudo apt-get install python3-distutils python3-dev python-is-python3 libtinfo5  build-essential liblapack-dev libblas-dev gfortran
+
+      - name: Bazel fetch
+        # Let's fetch all WORKSPACE artifacts to see if they can resolve fully
+        run: |
+          bazel fetch //...
+
+      - name: Bazel Test All (opt)
+        run: |
+          bazel test -c opt -- //xls/...
+
+      - name: Dist
+        run: |
+          VERSION=$(git describe --match=v*)
+          TAG_EXISTS="$(git tag -l $VERSION)"
+          bazel build -c opt --stamp --embed_label=${VERSION} --//dist:version=${VERSION} --//dist:os=${RUNNER_OS@L} --//dist:arch=${RUNNER_ARCH@L} -- //dist:xls_dist_tar
+          echo "VERSION=${VERSION}" >> ${GITHUB_ENV}
+          echo "TAG_EXISTS=${TAG_EXISTS}" >> ${GITHUB_ENV}
+
+      - name: Test release archive
+        run: |
+          tar -xzvvf bazel-bin/dist/xls-${VERSION}-${RUNNER_OS@L}-${RUNNER_ARCH@L}.tar.gz
+          cd xls-${VERSION}-${RUNNER_OS@L}-${RUNNER_ARCH@L}/
+          [[ -f LICENSE ]]
+          [[ -f THIRD_PARTY_NOTICES.txt ]]
+
+      - name: Test tools version
+        run: |
+          cd xls-${VERSION}-${RUNNER_OS@L}-${RUNNER_ARCH@L}/
+          INTERPRETER_MAIN_VERSION=$(./interpreter_main --version)
+          [[ ${INTERPRETER_MAIN_VERSION} = ${VERSION} ]]
+          IR_CONVERTER_MAIN_VERSION=$(./ir_converter_main --version)
+          [[ ${IR_CONVERTER_MAIN_VERSION} = ${VERSION} ]]
+          OPT_MAIN_VERSION=$(./opt_main --version)
+          [[ ${OPT_MAIN_VERSION} = ${VERSION} ]]
+          CODEGEN_MAIN_VERSION=$(./codegen_main --version)
+          [[ ${CODEGEN_MAIN_VERSION} = ${VERSION} ]]
+          PROTO_TO_DSLX_MAIN_VERSION=$(./proto_to_dslx_main --version)
+          [[ ${PROTO_TO_DSLX_MAIN_VERSION} = ${VERSION} ]]
+
+      - name: Test stdlib import
+        run: |
+          cd xls-${VERSION}-${RUNNER_OS@L}-${RUNNER_ARCH@L}/
+          ./interpreter_main ${GITHUB_WORKSPACE}/xls/examples/sha256.x
+          ./ir_converter_main ${GITHUB_WORKSPACE}/xls/examples/sha256.x
+
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        if: env.TAG_EXISTS == ''
+        with:
+          tag_name: ${{ env.VERSION }}
+          target_commitish: ${{ github.sha }}  # needed for the release to create the tag.
+          files: bazel-bin/dist/xls-${{ env.VERSION }}-*.tar.gz
+
+      - name: Clean Bazel Cache
+        run: |
+          # display bazel download cache size.
+          du -sh $(bazel info repository_cache)
+          # delete bazel download cache.
+          rm -r $(bazel info repository_cache)
+          # delete asap7 from bazel cache.
+          rm -r ~/.cache/bazel/_bazel*/*/external/org_theopenroadproject_asap7*/
+          # delete jdk from bazel cache.
+          rm -r ~/.cache/bazel/_bazel*/*/external/remotejdk11_linux/
+          # delete release artifacts from cache.
+          rm -r ~/.cache/bazel/_bazel*/*/execroot/com_google_xls/bazel-out/*/bin/dist/
+          # breakdown remaining bazel cache size.
+          du -h -t 200M ~/.cache/bazel/*/ | sort -hr
+
+      # used by `continuous-integration` and `one-bazel-test-` workflows.
+      - name: Save Bazel Cache
+        uses: actions/cache/save@v4
+        with:
+          path: "~/.cache/bazel"
+          key: bazel-cache-nightly-${{ runner.os }}-${{ github.sha }}

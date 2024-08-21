@@ -1,61 +1,270 @@
 version: 2.1
 
+commands:
+  setup-bazel:
+    description: |
+      Setup the Bazel build system used for building Android projects
+    steps:
+      - run:
+          name: Add Bazel Apt repository
+          command: |
+            sudo apt install apt-transport-https curl gnupg -y
+            curl -fsSL https://bazel.build/bazel-release.pub.gpg | gpg --dearmor >bazel-archive-keyring.gpg
+            sudo mv bazel-archive-keyring.gpg /usr/share/keyrings
+            echo "deb [arch=amd64 signed-by=/usr/share/keyrings/bazel-archive-keyring.gpg] https://storage.googleapis.com/bazel-apt stable jdk1.8" | sudo tee /etc/apt/sources.list.d/bazel.list
+      - run:
+          name: Install Bazel from Apt
+          command: sudo apt update && sudo apt install bazel
+
 parameters:
-  run_daily_replay:
-    type: boolean
-    default: false
+  target:
+    type: string
+    default: "//xls/dslx:interpreter_test"
+  runs_per_test:
+    type: string
+    default: "1"
+
 
 jobs:
-  run_replay_job:
+# docs
+  docs:
     docker:
-      - image: cimg/python:3.12
-    resource_class: small
+      - image: cimg/python:3.12.5
+    steps:
+      - checkout
+      - run: |
+          pip install --upgrade pip
+          pip install mkdocs mkdocs-gen-files mkdocs-material mkdocs-exclude mkdocs-print-site-plugin mdx_truly_sane_lists
+      - run: |
+          mkdocs build
+        # git config --global user.name 'xls-github-bot'
+        # git config --global user.email 'xls-github-bot'
+        # git add .
+        # LATEST_HASH=$(git rev-parse HEAD)
+        # git commit -a -m "mkdocs generated documentation from ${LATEST_HASH}" && git push
+
+
+  build:
+    machine:
+      image: ubuntu-2404:2024.05.1
+    resource_class: 2xlarge
     environment:
-      UPSTREAM_REPO: https://github.com/efficientengineering/xls.git
-      CIRCLECI_PROJECT_SLUG: a0c1da2e-4fdc-40db-ab43-9b635d9bfd71
-      GITHUB_REPO_SLUG: efficientengineering/xls
-      SHEETS_JOB_TAB: xls_job_data
-      SHEETS_WORKFLOW_TAB: xls_workflow_data
-      CONFIG_PATH: configs/
+      BAZEL_TARGET: << pipeline.parameters.target >>
+      BAZEL_RUNS_PER_TEST: << pipeline.parameters.runs_per_test >>
+    steps:
+      - checkout
+      - setup-bazel
+      - run:
+          name: clean up
+          command: |
+            sudo rm /etc/apt/sources.list.d/google-chrome.list
+            sudo apt update
+            rm -rf /home/circleci/.cache/bazel/_bazel_circleci/install/937e6e0d806e40997135c14c1d61532a
+      - restore_cache:
+          keys:
+            - bazel-cache-nightly-*
+            - bazel-cache-
+      - run:
+          name: Clear Bazel Cache (if needed)
+          command: |
+            if [ -d "/home/circleci/.cache/bazel/_bazel_circleci/install" ]; then
+              rm -rf /home/circleci/.cache/bazel/_bazel_circleci/install/*
+            fi
+      - run: sudo apt-get install python3-dev python-is-python3  build-essential liblapack-dev libblas-dev gfortran
+      - run: |
+          bazel build -c opt --noshow_progress --test_output=errors -- //xls/dslx:interpreter_main //xls/dslx/ir_convert:ir_converter_main //xls/tools:opt_main //xls/tools:codegen_main
+      - run: |
+          bazel test -c opt --noshow_progress --test_output=errors -- //...
+      - save_cache:
+          paths:
+            - /home/circleci/.cache/bazel
+          key: bazel-cache-
+
+# nightly fuzz
+  nightly_fuzz:
+    docker:
+      - image: circleci/python:3.8 
     steps:
       - checkout
       - run:
-          name: Decode Google Service Account File
+          name: Install dependencies via apt
           command: |
-            mkdir -p ~/.config/gspread/
-            echo -n ${GOOGLE_SERVICE_ACCOUNT} | base64 --decode > ~/.config/gspread/service_account.json
+            sudo apt-get update
+            sudo apt-get install -y python3-distutils python3-dev python-is-python3 libtinfo5 build-essential liblapack-dev libblas-dev gfortran
       - run:
-          name: Install Python Requirements
-          command: pip install -r requirements.txt
-      - run:
-          name: Run Replay Script
-          # Add --branch branch_name to customize the branch used
+          name: Bazel Build Fuzz Driver (opt)
           command: |
-                  python3 replay_commits_benchmark.py \
-                    --upstream-repo-url $UPSTREAM_REPO \
-                    --config-path $CONFIG_PATH \
-                    --circleci-project-slug $CIRCLECI_PROJECT_SLUG \
-                    --github-repo-slug $GITHUB_REPO_SLUG \
-                    --google-sheet-id $GOOGLE_SHEETS_ID \
-                    --google-sheet-workflow-tab $SHEETS_WORKFLOW_TAB \
-                    --google-sheet-job-tab $SHEETS_JOB_TAB \
-                    --github-token $GITHUB_TOKEN \
-                    --circleci-token $CIRCLECI_TOKEN \
-                    --dump-json \
-                    --log-path .
-                    
-      - store_artifacts:
-          path: benchmark-computed.json
-      - store_artifacts:
-          path: benchmark-raw.json
+            bazel build -c opt --noshow_progress xls/fuzzer:run_fuzz_multiprocess
+      - run:
+          name: Bazel Run Fuzz (opt)
+          command: |
+            bazel run -c opt xls/fuzzer:run_fuzz_multiprocess -- --crash_path ~/project/crashers --sample_count=2048 --summary_path ~/project/crashers
+      - persist_to_workspace:
+          root: ~/project
+          paths:
+            - crashers
+
+# nightly-macos
+  build_macos:
+    macos:
+      xcode: "14.0.1"  # Specify the Xcode version compatible with your project
+    resource_class: macos.m1.large.gen1  # Use a larger resource class if needed
+    steps:
+      - checkout
+      - run:
+          name: Bazel Build Tools (opt)
+          command: |
+            bazel build -c opt --noshow_progress --test_output=errors -- //xls/dslx:interpreter_main //xls/dslx/ir_convert:ir_converter_main //xls/tools:opt_main //xls/tools:codegen_main
+
+#nightly-ubuntu  
+  nightly_ubuntu:
+    docker:
+      - image: circleci/python:3.8
+    environment:
+      GITHUB_WORKSPACE: ~/project
+    steps:
+      - checkout
+      - run:
+          name: Install dependencies via apt
+          command: |
+            sudo apt-get update
+            sudo apt-get install -y python3-distutils python3-dev python-is-python3 libtinfo5 build-essential liblapack-dev libblas-dev gfortran
+      - run:
+          name: Bazel fetch
+          command: |
+            bazel fetch //...
+      - run:
+          name: Bazel Test All (opt)
+          command: |
+            bazel test -c opt -- //xls/...
+      - run:
+          name: Dist
+          command: |
+            VERSION=$(git describe --match=v*)
+            TAG_EXISTS="$(git tag -l $VERSION)"
+            bazel build -c opt --stamp --embed_label=${VERSION} --//dist:version=${VERSION} --//dist:os=linux --//dist:arch=amd64 -- //dist:xls_dist_tar
+            echo "VERSION=${VERSION}" >> ${BASH_ENV}
+            echo "TAG_EXISTS=${TAG_EXISTS}" >> ${BASH_ENV}
+      - run:
+          name: Test release archive
+          command: |
+            tar -xzvvf bazel-bin/dist/xls-${VERSION}-linux-amd64.tar.gz
+            cd xls-${VERSION}-linux-amd64/
+            [[ -f LICENSE ]]
+            [[ -f THIRD_PARTY_NOTICES.txt ]]
+      - run:
+          name: Test tools version
+          command: |
+            cd xls-${VERSION}-linux-amd64/
+            INTERPRETER_MAIN_VERSION=$(./interpreter_main --version)
+            [[ ${INTERPRETER_MAIN_VERSION} = ${VERSION} ]]
+            IR_CONVERTER_MAIN_VERSION=$(./ir_converter_main --version)
+            [[ ${IR_CONVERTER_MAIN_VERSION} = ${VERSION} ]]
+            OPT_MAIN_VERSION=$(./opt_main --version)
+            [[ ${OPT_MAIN_VERSION} = ${VERSION} ]]
+            CODEGEN_MAIN_VERSION=$(./codegen_main --version)
+            [[ ${CODEGEN_MAIN_VERSION} = ${VERSION} ]]
+            PROTO_TO_DSLX_MAIN_VERSION=$(./proto_to_dslx_main --version)
+            [[ ${PROTO_TO_DSLX_MAIN_VERSION} = ${VERSION} ]]
+      - run:
+          name: Test stdlib import
+          command: |
+            cd xls-${VERSION}-linux-amd64/
+            ./interpreter_main ${GITHUB_WORKSPACE}/xls/examples/sha256.x
+            ./ir_converter_main ${GITHUB_WORKSPACE}/xls/examples/sha256.x
+      - run:
+          name: Clean Bazel Cache
+          command: |
+            du -sh $(bazel info repository_cache)
+            rm -r $(bazel info repository_cache)
+            rm -r ~/.cache/bazel/_bazel*/*/external/org_theopenroadproject_asap7*/
+            rm -r ~/.cache/bazel/_bazel*/*/external/remotejdk11_linux/
+            rm -r ~/.cache/bazel/_bazel*/*/execroot/com_google_xls/bazel-out/*/bin/dist/
+            du -h -t 200M ~/.cache/bazel/*/ | sort -hr
+      - save_cache:
+          paths:
+            - ~/.cache/bazel
+          key: bazel-cache-nightly-{{ .Environment.RUNNER_OS }}-{{ .Environment.CIRCLE_SHA1 }}
+
+#Bazel test
+  bazel_test:
+    machine:
+      image: ubuntu-2404:2024.05.1
+    resource_class: 2xlarge
+    environment:
+      BAZEL_TARGET: << pipeline.parameters.target >>
+      BAZEL_RUNS_PER_TEST: << pipeline.parameters.runs_per_test >>
+    steps:
+      - checkout
+      - setup-bazel
+      - restore_cache:
+          key: bazel-cache-nightly-{{ .Environment.CIRCLE_JOB }}-{{ .Environment.CIRCLE_SHA1 }}
+      - run:
+          name: clean up
+          command: |
+            sudo rm /etc/apt/sources.list.d/google-chrome.list
+            sudo apt update
+            
+      - run:
+          name: Install dependencies via apt
+          command: |
+            sudo apt-get update
+            sudo apt-get install -y python3-dev python-is-python3 build-essential liblapack-dev libblas-dev gfortran
+
+      - run:
+          name: Bazel Test Target (opt)
+          command: |
+            bazel test -c opt --test_output=all --runs_per_test=$BAZEL_RUNS_PER_TEST -- $BAZEL_TARGET
+
+      - save_cache:
+          paths:
+            - ~/.cache/bazel
+          key: bazel-cache-nightly-{{ .Environment.CIRCLE_JOB }}-{{ .Environment.CIRCLE_SHA1 }}
 
 workflows:
-  daily_replay_workflow:
-    # when: << pipeline.parameters.run_daily_replay >>
+  docs:
     jobs:
-      - run_replay_job:
-          context:
-            - react-benchmarking
-          filters:
-            branches:
-              only: main
+      - docs
+  
+  ci:
+    jobs:
+      - build
+  
+  # nightly_fuzz_workflow:
+  #   triggers:
+  #     - schedule:
+  #         cron: "0 7 * * *"
+  #         filters:
+  #           branches:
+  #             only: main
+  #   jobs:
+  #     - nightly_fuzz
+
+  # nightly_macos_workflow:
+  #   triggers:
+  #     - schedule:
+  #         cron: "0 7 * * *"
+  #         filters:
+  #           branches:
+  #             only: main  # Adjust to trigger on the appropriate branch
+  #   jobs:
+  #     - build_macos
+
+  # nightly_ubuntu_workflow:
+  #   triggers:
+  #     - schedule:
+  #         cron: "0 7 * * *"
+  #         filters:
+  #           branches:
+  #             only: main
+  #   jobs:
+  #     - nightly_ubuntu:
+  #         filters:
+  #           branches:
+  #             only: main
+  
+  bazel_test_workflow:
+    jobs:
+      - bazel_test
+
+  
