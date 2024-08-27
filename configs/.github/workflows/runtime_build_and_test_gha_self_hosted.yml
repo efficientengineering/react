@@ -7,7 +7,7 @@ env:
 
 jobs:
   # ----- FLOW -----
-  discover_flow_inline_configs_cloud:
+  discover_flow_inline_configs_gha_self_hosted:
     runs-on: [arc-runner-set]
     outputs:
       matrix: ${{ steps.set-matrix.outputs.result }}
@@ -20,9 +20,9 @@ jobs:
             const inlinedHostConfigs = require('./scripts/shared/inlinedHostConfigs.js');
             return inlinedHostConfigs.map(config => config.shortName);
 
-  flow_cloud:
-    name: flow_cloud-${{ matrix.flow_inline_config_shortname }}
-    needs: discover_flow_inline_configs_cloud
+  flow_gha_self_hosted:
+    name: flow_gha_self_hosted-${{ matrix.flow_inline_config_shortname }}
+    needs: discover_flow_inline_configs_gha_self_hosted
     runs-on: [arc-runner-set]
     continue-on-error: true
     strategy:
@@ -38,8 +38,8 @@ jobs:
       - run: node ./scripts/tasks/flow-ci ${{ matrix.flow_inline_config_shortname }}
 
   # ----- FIZZ -----
-  check_generated_fizz_runtime_cloud:
-    name: check_generated_fizz_runtime_cloud
+  check_generated_fizz_runtime_gha_self_hosted:
+    name: check_generated_fizz_runtime_gha_self_hosted
     runs-on: [arc-runner-set]
     steps:
       - uses: actions/checkout@v4
@@ -53,8 +53,8 @@ jobs:
           git diff --quiet || (echo "There was a change to the Fizz runtime. Run `yarn generate-inline-fizz-runtime` and check in the result." && false)
 
   # ----- FEATURE FLAGS -----
-  flags_cloud:
-    name: flags_cloud
+  flags_gha_self_hosted:
+    name: flags_gha_self_hosted
     runs-on: [arc-runner-set]
     steps:
       - uses: actions/checkout@v4
@@ -66,8 +66,8 @@ jobs:
       - run: yarn flags
 
   # ----- TESTS -----
-  yarn_test_cloud:
-    name: yarn_test_cloud-${{ matrix.params }}-${{ matrix.shard }}
+  yarn_test_gha_self_hosted:
+    name: yarn_test_gha_self_hosted-${{ matrix.params }}-${{ matrix.shard }}
     runs-on: [arc-runner-set]
     strategy:
       matrix:
@@ -108,8 +108,8 @@ jobs:
       - run: yarn test ${{ matrix.params }} --ci=github --shard=${{ matrix.shard }}
 
   # ----- BUILD -----
-  build_and_lint_cloud:
-    name: build_and_lint_cloud-${{ matrix.worker_id }}-${{ matrix.release_channel }}
+  build_and_lint_gha_self_hosted:
+    name: build_and_lint_gha_self_hosted-${{ matrix.worker_id }}-${{ matrix.release_channel }}
     runs-on: [arc-runner-set]
     strategy:
       matrix:
@@ -138,9 +138,9 @@ jobs:
           name: _build_${{ matrix.worker_id }}_${{ matrix.release_channel }}
           path: build
 
-  test_build_cloud:
-    name: test_build_cloud-${{ matrix.test_params }}-${{ matrix.shard }}
-    needs: build_and_lint_cloud
+  test_build_gha_self_hosted:
+    name: test_build_gha_self_hosted-${{ matrix.test_params }}-${{ matrix.shard }}
+    needs: build_and_lint_gha_self_hosted
     strategy:
       matrix:
         test_params: [
@@ -197,8 +197,8 @@ jobs:
       - run: yarn test --build ${{ matrix.test_params }} --shard=${{ matrix.shard }} --ci=github
 
   # ----- FLIGHT -----
-  run_fixtures_flight_tests_cloud:
-    needs: build_and_lint_cloud
+  run_fixtures_flight_tests_gha_self_hosted:
+    needs: build_and_lint_gha_self_hosted
     runs-on: [arc-runner-set]
     steps:
       # Fixture copies some built packages from the workroot after install.

@@ -5,7 +5,7 @@ env:
   TZ: /usr/share/zoneinfo/America/Los_Angeles
 
 jobs:
-  test_fuzz_cloud:
+  test_fuzz_gha_self_hosted:
     if: inputs.prerelease_commit_sha == ''
     runs-on: [arc-runner-set]
     env:

@@ -13,7 +13,7 @@ defaults:
     working-directory: compiler
 
 jobs:
-  rust_test_cloud:
+  rust_test_gha_self_hosted:
     name: rust_test_cloud
     strategy:
       matrix:
@@ -32,7 +32,7 @@ jobs:
       - name: cargo test
         run: cargo test --manifest-path=Cargo.toml --locked ${{ matrix.target.features && '--features' }} ${{ matrix.target.features }}
 
-  rust_lint_cloud:
+  rust_lint_gha_self_hosted:
     runs-on: [arc-runner-set]
     steps:
       - uses: actions/checkout@v4
@@ -49,7 +49,7 @@ jobs:
       # - name: cargo clippy
       #   run: rustup run nightly-2023-08-01 cargo clippy -- -Dclippy::correctness
 
-  rust_build_cloud:
+  rust_build_gha_self_hosted:
     runs-on: [arc-runner-set]
     # TODO: build on more platforms, deploy, etc
     steps:

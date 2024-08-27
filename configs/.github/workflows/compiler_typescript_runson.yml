@@ -10,7 +10,7 @@ defaults:
     working-directory: compiler
 
 jobs:
-  discover_yarn_workspaces_cloud:
+  discover_yarn_workspaces_runson:
     runs-on: [runs-on,runner=2cpu-linux-x64,"run-id=${{ github.run_id }}"]
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
@@ -20,7 +20,7 @@ jobs:
         run: echo "matrix=$(find packages -mindepth 1 -maxdepth 1 -type d | sed 's!packages/!!g' | tr '\n' ',' | sed s/.$// | jq -Rsc '. / "," - [""]')" >> $GITHUB_OUTPUT
 
   # Hardcoded to improve parallelism
-  typescript_lint_cloud:
+  typescript_lint_runson:
     runs-on: [runs-on,runner=2cpu-linux-x64,"run-id=${{ github.run_id }}"]
     steps:
       - uses: actions/checkout@v4
@@ -32,7 +32,7 @@ jobs:
       - run: yarn workspace babel-plugin-react-compiler lint
 
   # Hardcoded to improve parallelism
-  typescript_jest_cloud:
+  typescript_jest_runson:
     runs-on: [runs-on,runner=2cpu-linux-x64,"run-id=${{ github.run_id }}"]
     steps:
       - uses: actions/checkout@v4
@@ -43,9 +43,9 @@ jobs:
           hashfile-path: 'compiler/**/yarn.lock'
       - run: yarn workspace babel-plugin-react-compiler jest
 
-  typescript_test_cloud:
-    name: typescript_test_cloud-${{ matrix.workspace_name }}
-    needs: discover_yarn_workspaces_cloud
+  typescript_test_runson:
+    name: typescript_test_runson-${{ matrix.workspace_name }}
+    needs: discover_yarn_workspaces_runson
     runs-on: [runs-on,runner=2cpu-linux-x64,"run-id=${{ github.run_id }}"]
     continue-on-error: true
     strategy:

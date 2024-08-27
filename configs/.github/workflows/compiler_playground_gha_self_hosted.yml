@@ -10,7 +10,7 @@ defaults:
     working-directory: compiler
 
 jobs:
-  test_playground_cloud:
+  test_playground_gha_self_hosted:
     runs-on: [arc-runner-set]
     steps:
       - uses: actions/checkout@v4

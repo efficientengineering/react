@@ -6,7 +6,7 @@ env:
   TZ: /usr/share/zoneinfo/America/Los_Angeles
 
 jobs:
-  prettier_cloud:
+  prettier_gha_self_hosted:
     runs-on: [arc-runner-set]
     steps:
       - uses: actions/checkout@v4
@@ -17,7 +17,7 @@ jobs:
           hashfile-path: '**/yarn.lock'
       - run: yarn prettier-check
 
-  eslint_cloud:
+  eslint_gha_self_hosted:
     runs-on: [arc-runner-set]
     steps:
       - uses: actions/checkout@v4
@@ -28,7 +28,7 @@ jobs:
           hashfile-path: '**/yarn.lock'
       - run: node ./scripts/tasks/eslint
 
-  check_license_cloud:
+  check_license_gha_self_hosted:
     runs-on: [arc-runner-set]
     steps:
       - uses: actions/checkout@v4
@@ -39,7 +39,7 @@ jobs:
           hashfile-path: '**/yarn.lock'
       - run: ./scripts/ci/check_license.sh
 
-  test_print_warnings_cloud:
+  test_print_warnings_gha_self_hosted:
     runs-on: [arc-runner-set]
     steps:
       - uses: actions/checkout@v4

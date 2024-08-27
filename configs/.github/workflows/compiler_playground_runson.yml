@@ -10,7 +10,7 @@ defaults:
     working-directory: compiler
 
 jobs:
-  test_playground_cloud:
+  test_playground_runson:
     runs-on: [runs-on,runner=2cpu-linux-x64,"run-id=${{ github.run_id }}"]
     steps:
       - uses: actions/checkout@v4

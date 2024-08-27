@@ -5,7 +5,7 @@ env:
   TZ: /usr/share/zoneinfo/America/Los_Angeles
 
 jobs:
-  test_fuzz_cloud:
+  test_fuzz_runson:
     if: inputs.prerelease_commit_sha == ''
     runs-on: [runs-on,runner=2cpu-linux-x64,"run-id=${{ github.run_id }}"]
     env:
